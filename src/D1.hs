@@ -11,17 +11,17 @@ import           Util
 
 day1A :: BS.ByteString -> BS.ByteString
 day1A bs =
-  let depths = mapMaybe readInt $ BS.lines bs
+  let depths = readInt <$> BS.lines bs
    in BS.pack . show $ solve depths
 
 day1B :: BS.ByteString -> BS.ByteString
 day1B bs =
-  let depths = mapMaybe readInt $ BS.lines bs
+  let depths = readInt <$> BS.lines bs
       grouped =
         zipWith3 (((+) .) . (+))
           depths
           (tail depths)
-          (tail $ tail depths)
+          (drop 2 depths)
    in BS.pack . show $ solve grouped
 
 solve :: [Int] -> Int

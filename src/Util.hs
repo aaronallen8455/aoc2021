@@ -3,6 +3,7 @@ module Util
   ) where
 
 import qualified Data.ByteString.Char8 as BS
+import           Data.Maybe
 
-readInt :: BS.ByteString -> Maybe Int
-readInt = fmap fst . BS.readInt
+readInt :: BS.ByteString -> Int
+readInt = fst . fromJust . BS.readInt
