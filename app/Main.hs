@@ -11,6 +11,7 @@ main = do
 
   BS.interact $ case day <> c of
     "1a" -> day1A
+    "1b" -> day1B
 
   putStrLn ""
   putStrLn "--------------------------------------------------------------------------------"

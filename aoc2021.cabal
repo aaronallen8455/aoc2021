@@ -29,11 +29,17 @@ executable aoc2021
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    other-modules: D1, D2
+    other-modules: Util, D1, D2
 
-    default-extensions: OverloadedStrings, GHC2021
+    default-extensions: OverloadedStrings, GHC2021, DerivingVia,
+                        LambdaCase, ViewPatterns, MultiWayIf,
+                        StrictData, LinearTypes
     build-depends:    base ^>=4.16.0.0,
                       bytestring,
-                      containers
+                      containers,
+                      linear-base,
+                      vector,
+                      mtl,
+                      transformers
     hs-source-dirs:   app, src
     default-language: Haskell2010
