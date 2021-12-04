@@ -6,6 +6,7 @@ import           System.Environment (getArgs)
 import           D1
 import           D2
 import           D3
+import           D4
 
 main :: IO ()
 main = do
@@ -18,6 +19,8 @@ main = do
     "2b" -> day2B
     "3a" -> day3A
     "3b" -> day3B
+    "4a" -> day4A
+    "4b" -> day4B
 
   putStrLn ""
   putStrLn "--------------------------------------------------------------------------------"
