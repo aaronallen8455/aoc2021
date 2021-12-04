@@ -33,7 +33,7 @@ mkBoard :: [[Int]] -> ST s (Board s)
 mkBoard = A.newListArray ((0,0),(4,4)) . concatMap (map Just)
 
 solveA :: [Int] -> [Board s] -> ST s Int
-solveA nums boards = evalContT $ traverse_ go nums >> error "no solution"
+solveA nums boards = evalContT $ traverse_ go nums *> error "no solution"
   where
     go n = do
       for_ boards $ \board -> do
@@ -76,10 +76,10 @@ day4B (BS.lines -> nbs:_:boardsBs) =
      BS.pack . show <$> solveB nums boardArrs
 
 solveB :: [Int] -> [Board s] -> ST s Int
-solveB nums = evalContT . go nums
+solveB nums boards = evalContT $ foldM_ go boards nums *> error "no solution"
   where
-    go (n:ns) boards = do
-      newBoards <- fmap catMaybes . for boards $ \board -> do
+    go boards n = do
+      flip filterM boards $ \board -> do
         mCoord <- lift $ findNum board n
         isWinner <- lift $ traverse (checkForWin board) mCoord
         if isWinner == Just True
@@ -87,7 +87,5 @@ solveB nums = evalContT . go nums
              when (length boards == 1) $ do
                summed <- lift $ sumElems board
                shiftT $ \_ -> pure $ summed * n
-             pure Nothing
-           else pure $ Just board
-
-      go ns newBoards
+             pure False
+           else pure True
