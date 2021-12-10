@@ -2,6 +2,7 @@ module Util
   ( readInt
   , chunksOf
   , biDirectionalBFS
+  , showBS
   ) where
 
 import           Control.Applicative
@@ -45,3 +46,6 @@ biDirectionalBFS next start@(startK, startV) end@(endK, endV) =
     findMatch (k, v) visited i = do
       (d, v2) <- visited M.!? k
       Just (d + i, v <> v2)
+
+showBS :: Show a => a -> BS.ByteString
+showBS = BS.pack . show
