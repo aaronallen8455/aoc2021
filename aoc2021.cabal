@@ -30,7 +30,7 @@ executable aoc2021
 
     -- Modules included in this executable, other than Main.
     other-modules: Util, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10,
-                   D11, D12
+                   D11, D12, D13, D14
 
     default-extensions: OverloadedStrings, GHC2021, DerivingVia,
                         LambdaCase, ViewPatterns, MultiWayIf,
