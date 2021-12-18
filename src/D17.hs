@@ -17,7 +17,7 @@ day17A (BS.break (not . isNumber) . BS.tail . snd . BS.break (== '=') -> (x1, re
    in showBS $ peak (abs $ readInt y1 + 1)
 
 peak :: Int -> Int
-peak y = maximum $ scanl1 (+) [y,y-1..0]
+peak y = (y^2 + y) `div` 2
 
 day17B :: BS.ByteString -> BS.ByteString
 day17B (BS.break (not . isNumber) . BS.tail . snd . BS.break (== '=') -> (x1, rest)) =
