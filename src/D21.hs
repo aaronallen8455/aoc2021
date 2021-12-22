@@ -37,7 +37,7 @@ step curDice curScore curPos =
   let r1 = curDice
       r2 = mod100 $ curDice + 1
       r3 = mod100 $ curDice + 2
-   in ((curPos + r1 + r2 + r3 - 1) `mod` 10) + 1
+   in mod10 $ curPos + r1 + r2 + r3
 
 day21B :: BS.ByteString -> BS.ByteString
 day21B (map (map BS.tail . BS.split ':') . BS.lines -> [[_, readInt -> p1],[_, readInt -> p2]]) =
