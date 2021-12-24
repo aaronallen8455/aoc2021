@@ -26,7 +26,6 @@ import           D20
 import           D21
 import           D22
 import           D23
-import           D23b
 
 main :: IO ()
 main = do
