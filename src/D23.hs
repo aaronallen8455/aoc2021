@@ -1,6 +1,7 @@
 module D23
   ( day23A
-  , day23B
+  , progressMoves
+  , test
   ) where
 
 import           Control.Monad.State.Strict
@@ -152,16 +153,24 @@ isDone p =
           (Just a, Just b) -> a == b && getDest a == rm
           _ -> False
 
+test :: Path
+test =
+  Path testSt 0 where
+    testSt =
+      St { room1 = (Just 'B', Just 'A')
+         , room2 = (Just 'C', Just 'D')
+         , room3 = (Nothing, Just 'C')
+         , room4 = (Just 'D', Just 'A')
+         , hall = IM.insert 3 (Just 'B') $ IM.fromList (zip [0..10] $ repeat Nothing)
+         }
+
 -- returns a list of desirable moves
 progressMoves :: Path -> [Path]
-progressMoves p@(Path st cost) =
+progressMoves p =
   let rooms = [minBound..]
       rms = concatMap (progressRoom p) rooms
       halls = concatMap (progressHall p) hallIx
-   in (if null halls
-         then id --traceShow rms
-         else id) $
-    rms ++ halls
+   in rms ++ halls
 
 hallIx :: [Int]
 hallIx = [0,1,3,5,7,9,10]
@@ -171,7 +180,7 @@ progressRoom p@(Path st cost) rm =
   case getRoom rm st of
     (Just a, Just o)
       | getDest a == rm ->
-        if a == o then [] else traceShow (a, o) $ evacRoom 'X' p (getDest o)
+        if a == o then [] else evacRoom a p rm
 
       | otherwise -> do
         let dest = getDest a
@@ -181,7 +190,8 @@ progressRoom p@(Path st cost) rm =
             st' = setRoom (Nothing, Just o)
                     (moveToRoom a dest $ pathSt p')
                     rm
-            newPath = Path st' $ pathCost p' + ucost
+            newCost = pathCost p' + ucost
+            newPath = Path st' newCost
         pure newPath
     (Nothing, Just a)
       | getDest a == rm -> []
@@ -193,7 +203,8 @@ progressRoom p@(Path st cost) rm =
             st' = setRoom (Nothing, Nothing)
                     (moveToRoom a dest $ pathSt p')
                     rm
-            newPath = Path st' $ pathCost p' + ucost
+            newCost = pathCost p' + ucost
+            newPath = Path st' newCost
         pure newPath
 
     _ -> []
@@ -305,6 +316,3 @@ type M a = State DP a
 --   | otherwise = search [] [] (map (st,) pMoves)
 --   where
 --     pMoves = progressMoves st
-
-day23B :: BS.ByteString -> BS.ByteString
-day23B = undefined
