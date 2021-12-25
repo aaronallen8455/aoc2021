@@ -93,7 +93,7 @@ runInReverse instrs = fst $ foldl' go ([], M.empty) (reverse instrs) where
   -- such that the result is not equal to b
   unEql _ _ = error "invalid equal" -- need to handle other cases?
 
-  subt a b =
+  subt a b = -- numbers that can be added to b to get a
     case (a, b) of
       (N x, N y) -> N $ x - y
       (N x, MultOf bs d) -> MultOf (x - bs) d
@@ -106,22 +106,22 @@ runInReverse instrs = fst $ foldl' go ([], M.empty) (reverse instrs) where
 
       (NotEq a, NotEq b) -> NotEq $ subt a b -- is this right?
       (NotEq a, _) -> NotEq $ subt a b
-      (_, NotEq b) -> NotEq $ subt a b
+      (_, NotEq b) -> NotEq $ subt a b -- is this right?
 
-  divide a b =
+  divide a b = -- numbers that can be multiplied by b to get a
     case (a, b) of
       (N x, N y) -> N $ div x y
       (N x, MultOf bs d) ->
         let up = takeWhile (/=0) $ div x <$> [bs, bs + d..]
             down = takeWhile (/=0) $ div x <$> [bs -d, bs - 2 * d ..]
-         in OneOf . map N . (0 :) $ up <> down
+         in OneOf . map N $ up <> down -- don't include zero?
 
       -- Possible problem
       -- only find numbers that are actually divisible? Shouldn't need to
       (MultOf bs d, N x) ->
         let up = takeWhile (/=0) $ div <$> [bs, bs + d..] <*> [x]
             down = takeWhile (/=0) $ div' <$> [bs -d, bs - 2 * d ..] <*> [x]
-         in OneOf . map N . (0 :) $ up <> down
+         in OneOf . map N $ up <> down
 
       (OneOf xs, _) -> OneOf $ divide <$> xs <*> pure b
       (_, OneOf xs) -> OneOf $ divide a <$> xs
@@ -134,29 +134,65 @@ runInReverse instrs = fst $ foldl' go ([], M.empty) (reverse instrs) where
     case (a, b) of
       (N x, N y) ->
         let b = x * y
-            opts = [b .. b + x - 1]
+            opts = N <$> [b .. b + x - 1]
          in OneOf opts
 
+      -- hope this is right
       (N x, MultOf bs d) ->
-        let up = takeWile (/=0) $ div' x <$> [bs, bs + d]
-            down = takeWhile (/=0) $ div' <$> [bs - d, bs - 2*d..] <*> [x]
-         in MultOf $ do
+        let up = takeWhile (/=0) $ div' x <$> [bs, bs + d]
+            down = takeWhile (/=0) $ div' x <$> [bs - d, bs - 2*d..]
+         in OneOf . map N $ do
               c <- up <> down
+              let b = x * c
+              [b .. b + x - 1]
+
+      (MultOf bs d, N x) ->
+        let up = takeWhile (/=0) $ div' <$> [bs, bs + d] <*> [x]
+            down = takeWhile (/= 0) $ div' <$> [bs -d, bs - d*2] <*> [x]
+         in OneOf . map N $ do
+              c <- up <> down
+              let b = x * c
+              [b .. b + x - 1]
+
+      (OneOf xs, _) -> OneOf $ options <$> xs <*> pure b
+      (_, OneOf xs) -> OneOf $ options a <$> xs
+
+      (NotEq a, NotEq b) -> NotEq $ options a b -- is this right?
+      (NotEq a, _) -> NotEq $ options a b
+      (_, NotEq b) -> NotEq $ options a b
 
 -- to keep it simpler, could have a list of nums within some sane range.
 -- will result in exponential blow up.
 
-  options = undefined
-  unMod = undefined
+-- 27 
+
+  unMod a b = -- numbers that have remainder a when divided by b
+    case (a, b) of
+      (N x, N y) -> MultOf x y
+
+      (N x, MultOf bs d) -> -- MultOf (bs + x) d
+        -- first num which will have remainder x when divided by anything in bs d
+        MultOf (bs + x) bs -- very uncertain. This is zipping rather than all combos
+
+      (MultOf bs d, N x) ->
+        let cs = [bs, bs + d]
+         in OneOf $ do
+           c <- cs -- a number that has this remainder when divided by x
+           MultOf c x
 
   findMax = undefined
+
+-- if the set is [3,7,11,14..], I want to find the numbers that have a specific
+-- remainder when divided by any of these
+-- [1,4,7..]
 
 -- could find the values of z that are able to succeed in final step, then
 -- inductively go backwards to find acceptable values in prior blocks and we
 -- have the complete list of possibles
 
 -- still, determining z even with an expression of only operations and constants
--- seems difficult.
+-- seems difficult. Would have to brute force all the operations. No, just plug
+-- in each of the options until one fits? we don't have options
 
 --   subtract' a b =
 --     case (a, b) of
@@ -179,7 +215,7 @@ data Expr
   | Div' !Expr !Expr
   | Mod' !Expr !Expr
   | Eql' !Expr !Expr
-  | Inp' !Int
+  | Inp' Int
   | Const !Int
   deriving (Show, Eq)
 
