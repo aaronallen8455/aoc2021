@@ -1,7 +1,6 @@
 module D24
   ( day24A
   , day24B
-  , div'
   ) where
 
 import           Control.Monad
@@ -9,28 +8,115 @@ import           Data.Foldable
 import qualified Data.ByteString.Char8 as BS
 import           Data.Char
 import qualified Data.Map.Strict as M
+import           Data.Ord
 
 import           Util
 import           Debug.Trace
+import qualified Data.Set as S
+import           Data.Maybe
+import qualified Data.IntMap.Strict as IM
 
 day24A :: BS.ByteString -> BS.ByteString
 day24A (map parseInstr . BS.lines -> instr) =
-  let p = runPgrm' instr
-   in showBS p
--- last digit increments 321272407
--- -3224605498 -3212725448
--- tryCombo :: [Int] -> [Int]
--- tryCombo combo = do
---   x <- [1..9]
---   let inp = take 14 $ combo ++ x : repeat 1
---   case 
-
--- The last position is a linear variable. No recognizable pattern for others.
-
--- possible to run the program in reverse?
+  let chunks = reverse $ splitOnInputs instr
+      nums = foldl' (solve False) (IM.singleton 0 []) chunks
+   in showBS nums
 
 day24B :: BS.ByteString -> BS.ByteString
-day24B = undefined
+day24B (map parseInstr . BS.lines -> instr) =
+  let chunks = reverse $ splitOnInputs instr
+      nums = foldl' (solve True) (IM.singleton 0 []) chunks
+   in showBS nums
+
+solve :: Bool -> IM.IntMap [Int] -> [Instr] -> IM.IntMap [Int]
+solve isDay2 m instr =
+  let simpl = simplify $ runPgrm' instr
+   in IM.fromListWith (if isDay2 then min else max) $ do
+     w <- [1..9]
+     (target, path) <- IM.toList m
+     let simpl' = subInp w simpl
+     cand <- estimate target simpl'
+     guard $ evalExpr cand simpl' == target
+     pure (cand, w:path)
+
+evalExpr :: Int -> Expr -> Int
+evalExpr z = \case
+  Inp' _ -> error "impossible"
+  ZVar -> z
+  Add' x y -> evalExpr z x + evalExpr z y
+  Mul' x y -> evalExpr z x * evalExpr z y
+  Div' x y -> evalExpr z x `div'` evalExpr z y
+  Mod' x y -> evalExpr z x `mod` evalExpr z y
+  Eql' x y -> if evalExpr z x == evalExpr z y then 1 else 0
+  Const x -> x
+
+subInp :: Int -> Expr -> Expr
+subInp inp = simplify . \case
+  Inp' _ -> Const inp
+  ZVar -> ZVar
+  Add' x y -> Add' (subInp inp x) (subInp inp y)
+  Mul' x y -> Mul' (subInp inp x) (subInp inp y)
+  Div' x y -> Div' (subInp inp x) (subInp inp y)
+  Mod' x y -> Mod' (subInp inp x) (subInp inp y)
+  Eql' x y -> Eql' (subInp inp x) (subInp inp y)
+  Const x -> Const x
+
+estimate :: Int -> Expr -> [Int]
+estimate target = \case
+  ZVar -> [target]
+  Inp' _ -> error "shouldn't happen"
+  Add' x y -> do
+    case handleEq y of
+      [] -> do
+        Const x <- handleEq x
+        estimate (target - x) y
+      ys -> do
+        Const y <- ys
+        estimate (target - y) x
+
+  Mul' x y -> do
+    case handleEq y of
+      [] -> do
+        Const x <- handleEq x
+        estimate (div target x) y
+      ys -> do
+        Const y <- ys
+        estimate (div target y) x
+
+  Div' x y -> do
+    case handleEq y of
+      [] -> do
+        Const x <- handleEq x
+        let p = target * x
+        ext <- [p.. p + (x - 1)]
+        estimate ext y
+      ys -> do
+        Const y <- ys
+        let p = target * y
+        ext <- [p.. p + (y - 1)]
+        estimate ext x
+
+  Mod' x y -> error "shouldn't happen"
+
+  Eql' _ _ -> [1, 0]
+
+  _ -> error "death"
+
+  where
+  handleEq (Add' ex1 ex2) = do
+    Const x <- handleEq ex1
+    Const y <- handleEq ex2
+    pure . Const $ x + y
+  handleEq (Mul' ex1 ex2) = do
+    Const x <- handleEq ex1
+    Const y <- handleEq ex2
+    pure . Const $ x * y
+  handleEq (Eql' _ _) = [Const 1, Const 0]
+  handleEq (Const x) = [Const x]
+  handleEq _ = []
+
+splitOnInputs :: [Instr] -> [[Instr]]
+splitOnInputs = chunksOf 18
 
 data Val
   = Var Char
@@ -52,163 +138,6 @@ parseVal (BS.unpack -> x@(h:rest))
   | isAlpha h = Var h
   | otherwise = Num $ read x
 
--- data N
---   = N Int
---   | Add'' N N
---   | Mul'' N N
---   | NotEq N
---   | Div'' N N
---   | Mod'' N N
-
--- data R
---   = N Int
---   | NotEq R
---   | MultOf R R -- starting number, distance between multiples
---   | OneOf [R]
-
-data R
-  = OneOf [R]
-  | N Int
-  | MultOf Int Int -- starting number, distance between multiples
-  | NotEq R
-
-runInReverse :: [Instr] -> [Int]
-runInReverse instrs = fst $ foldl' go ([], M.empty) (reverse instrs) where
-  go (inp, vars) = \case
-    Inp v -> (findMax (vars M.! v) : inp, vars)
-    Add v b -> doOP v b subt
-    Mul v b -> doOP v b divide
-    Div v b -> doOP v b options -- need to do better due to truncation
-    Mod v b -> doOP v b unMod
-    Eql v b -> doOP v b unEql
-    where
-    doOP v b op =
-      let v' = vars M.! v
-          b' = case b of
-                 Var x -> vars M.! x
-                 Num n -> N n
-       in (inp, M.insert v (op v' b') vars)
-  unEql (N 1) b = b
-  unEql (N 0) b = NotEq b -- what can be done here? Find the highest values of the inputs
-  -- such that the result is not equal to b
-  unEql _ _ = error "invalid equal" -- need to handle other cases?
-
-  subt a b = -- numbers that can be added to b to get a
-    case (a, b) of
-      (N x, N y) -> N $ x - y
-      (N x, MultOf bs d) -> MultOf (x - bs) d
-
-      (OneOf xs, _) -> OneOf $ subt <$> xs <*> pure b
-      (_, OneOf xs) -> OneOf $ subt a <$> xs
-
-      (MultOf bs d, N x) -> MultOf (bs - x) d
-      (MultOf bs1 d1, MultOf bs2 d2) -> MultOf (bs1 - bs2) d2
-
-      (NotEq a, NotEq b) -> NotEq $ subt a b -- is this right?
-      (NotEq a, _) -> NotEq $ subt a b
-      (_, NotEq b) -> NotEq $ subt a b -- is this right?
-
-  divide a b = -- numbers that can be multiplied by b to get a
-    case (a, b) of
-      (N x, N y) -> N $ div x y
-      (N x, MultOf bs d) ->
-        let up = takeWhile (/=0) $ div x <$> [bs, bs + d..]
-            down = takeWhile (/=0) $ div x <$> [bs -d, bs - 2 * d ..]
-         in OneOf . map N $ up <> down -- don't include zero?
-
-      -- Possible problem
-      -- only find numbers that are actually divisible? Shouldn't need to
-      (MultOf bs d, N x) ->
-        let up = takeWhile (/=0) $ div <$> [bs, bs + d..] <*> [x]
-            down = takeWhile (/=0) $ div' <$> [bs -d, bs - 2 * d ..] <*> [x]
-         in OneOf . map N $ up <> down
-
-      (OneOf xs, _) -> OneOf $ divide <$> xs <*> pure b
-      (_, OneOf xs) -> OneOf $ divide a <$> xs
-
-      (NotEq a, NotEq b) -> NotEq $ divide a b -- is this right?
-      (NotEq a, _) -> NotEq $ divide a b
-      (_, NotEq b) -> NotEq $ divide a b
-
-  options a b = -- find the numbers that can be divided by b to get a
-    case (a, b) of
-      (N x, N y) ->
-        let b = x * y
-            opts = N <$> [b .. b + x - 1]
-         in OneOf opts
-
-      -- hope this is right
-      (N x, MultOf bs d) ->
-        let up = takeWhile (/=0) $ div' x <$> [bs, bs + d]
-            down = takeWhile (/=0) $ div' x <$> [bs - d, bs - 2*d..]
-         in OneOf . map N $ do
-              c <- up <> down
-              let b = x * c
-              [b .. b + x - 1]
-
-      (MultOf bs d, N x) ->
-        let up = takeWhile (/=0) $ div' <$> [bs, bs + d] <*> [x]
-            down = takeWhile (/= 0) $ div' <$> [bs -d, bs - d*2] <*> [x]
-         in OneOf . map N $ do
-              c <- up <> down
-              let b = x * c
-              [b .. b + x - 1]
-
-      (OneOf xs, _) -> OneOf $ options <$> xs <*> pure b
-      (_, OneOf xs) -> OneOf $ options a <$> xs
-
-      (NotEq a, NotEq b) -> NotEq $ options a b -- is this right?
-      (NotEq a, _) -> NotEq $ options a b
-      (_, NotEq b) -> NotEq $ options a b
-
--- to keep it simpler, could have a list of nums within some sane range.
--- will result in exponential blow up.
-
--- 27 
-
-  unMod a b = -- numbers that have remainder a when divided by b
-    case (a, b) of
-      (N x, N y) -> MultOf x y
-
-      (N x, MultOf bs d) -> -- MultOf (bs + x) d
-        -- first num which will have remainder x when divided by anything in bs d
-        MultOf (bs + x) bs -- very uncertain. This is zipping rather than all combos
-
-      (MultOf bs d, N x) ->
-        let cs = [bs, bs + d]
-         in OneOf $ do
-           c <- cs -- a number that has this remainder when divided by x
-           MultOf c x
-
-  findMax = undefined
-
--- if the set is [3,7,11,14..], I want to find the numbers that have a specific
--- remainder when divided by any of these
--- [1,4,7..]
-
--- could find the values of z that are able to succeed in final step, then
--- inductively go backwards to find acceptable values in prior blocks and we
--- have the complete list of possibles
-
--- still, determining z even with an expression of only operations and constants
--- seems difficult. Would have to brute force all the operations. No, just plug
--- in each of the options until one fits? we don't have options
-
---   subtract' a b =
---     case (a, b) of
---       (EqTo a, EqTo b) -> EqTo $ a - b
---       (NotEq a, NotEq b) -> NotEq $ a - b
---       (EqTo a, NotEq b) -> NotEq $ a - b
---       (NotEq a, EqTo b) -> NotEq $ a - b
--- 
---       (EqTo a, MultOf x r) -> MultOf x _
--- 
---       (MultOf x1 r1, MultOf x2 r2) -> MultOf x1 (MultOf x2 $ subtract' r1 r2)
---       (MultOf x r, EqTo y) -> MultOf x (subtract' r $ EqTo y)
---       (MultOf x r, NotEq y) -> MultOf x (subtract' r $ NotEq y)
-
--- values in map should be expressions rather than concrete numbers
-
 data Expr
   = Add' !Expr !Expr
   | Mul' !Expr !Expr
@@ -217,6 +146,7 @@ data Expr
   | Eql' !Expr !Expr
   | Inp' Int
   | Const !Int
+  | ZVar
   deriving (Show, Eq)
 
 simplify :: Expr -> Expr
@@ -238,7 +168,7 @@ simplify = \case
     | otherwise -> doOP div' Div' a b
   Mod' (simplify -> a) (simplify -> b)
     | Inp' _ <- a, Const x <- b, x > 9 -> a
-    | otherwise -> doOP mod' Mod' a b
+    | otherwise -> doOP mod Mod' a b
   Eql' (simplify -> a) (simplify -> b)
     | Inp' _ <- a, Const x <- b, x <= 0 || x > 9 -> Const 0
     | Inp' _ <- b, Const x <- a, x <= 0 || x > 9 -> Const 0
@@ -250,6 +180,7 @@ simplify = \case
     | Const 0 <- b, cannotBe0 a -> Const 0
     | otherwise -> doOP (\x y -> if x == y then 1 else 0) Eql' a b
   Inp' n -> Inp' n
+  ZVar -> ZVar
   Const x -> Const x
   where
     doOP op con a b =
@@ -270,11 +201,9 @@ simplify = \case
       Inp' _ -> True
     outOfVarRange = \case
       Add' a b
-        | Mod' _ _ <- a, outOfVarRange b -> True
-        | Mod' _ _ <- b, outOfVarRange a -> True
         | Inp' _ <- a, outOfVarRange b -> True
-        | outOfVarRange a, Const x <- b, x >= 0 -> True
         | Inp' _ <- b, outOfVarRange a -> True
+        | outOfVarRange a, Const x <- b, x >= 0 -> True
         | outOfVarRange b, Const x <- a, x >= 0 -> True
         | otherwise -> False
       Mul' a b -> outOfVarRange a || outOfVarRange b
@@ -284,40 +213,9 @@ simplify = \case
       Const x -> x >= 9 || x <= -9
       Inp' _ -> False
 
--- Maybe it's another stupid problem where I just need to brute force.
-
--- One side of the op is always going to be a constant?
-
--- determineVars :: Int -> M.Map Int Int -> Expr -> (Expr, M.Map Int Int)
--- determineVars target m = \case
---   Add' a b ->
---     let (maxA, ra) = maxAssignments a
---         (maxB, rb) = maxAssignments b
---      in if maxA > maxB
---            then determineVars (negate ra) _
---            else _
---     let c1 = determineVars
--- 
--- assignmentToInts :: M.Map Int Int -> [Int]
--- assignmentToInts = M.elems
-
--- the inputs go into w, so the other vars must be expressible in
--- terms of operations on w and constants. w doesn't change once
--- set by an input
--- Once we have the expression for z, can just solve the equation
--- for each input (1..9).
-
--- Once the expression has been build, can set it equal to 0, meaning that
--- for addition, the second term must be equal to the negation of the first,
--- so we can essentially discard the first, unless it results in a greater
--- input. Need to look at the input from the first and see if it's greater than
--- the second.
---
--- Need some way of "equalizing" two expressions.
-
 runPgrm' :: [Instr] -> Expr
 runPgrm' instrs =
-  let r = foldl' go (M.fromList $ zip "xyzw" $ repeat (Const 0)) instrs
+  let r = foldl' go (M.insert 'z' ZVar . M.fromList $ zip "xyw" $ repeat (Const 0)) instrs
       go vars = \case
         Inp v ->
           case vars M.! v of
@@ -343,23 +241,27 @@ runPgrm' instrs =
    in r M.! 'z'
 
 runPgrm :: [Int] -> [Instr] -> Int
-runPgrm inp instrs =
-  let (_, r) = foldl' go (inp, M.fromList $ zip "xyzw" $ repeat 0) instrs
+runPgrm = runPgrm_ 0
+
+runPgrm_ :: Int -> [Int] -> [Instr] -> Int
+runPgrm_ z inp instrs =
+  let (_, r) = foldl' go (inp, M.fromList $ zip "xyzw" $ repeat z) instrs
       go (inp, vars) = \case
         Inp v ->
           case inp of
             x:rest -> (rest, M.insert v x vars)
-        Add v b -> doOP vars (+) v b
-        Mul v b -> doOP vars (*) v b
-        Div v b -> doOP vars div' v b
-        Mod v b -> doOP vars mod' v b
-        Eql v b -> doOP vars (\x y -> if x == y then 1 else 0) v b
-      doOP vars op v b =
-        let b' = case b of
-                   Var c -> vars M.! c
-                   Num v -> v
-         in (inp, M.insert v ((vars M.! v) `op` b') vars)
-   in r M.! 'z'
+        Add v b -> doOP (+) v b
+        Mul v b -> doOP (*) v b
+        Div v b -> doOP div' v b
+        Mod v b -> doOP mod v b
+        Eql v b -> doOP (\x y -> if x == y then 1 else 0) v b
+        where
+        doOP op v b =
+          let b' = case b of
+                     Var c -> vars M.! c
+                     Num v -> v
+           in (inp, M.insert v ((vars M.! v) `op` b') vars)
+  in r M.! 'z'
 
 data Instr
   = Inp Char
@@ -374,8 +276,3 @@ div' :: Int -> Int -> Int
 div' a b
   | (a >= 0 && b > 0) || (a < 0 && b < 0) = div a b
   | otherwise = negate $ abs a `div` abs b
-
-mod' :: Int -> Int -> Int
-mod' a b =
-  let x = div' a b
-   in b - (x * a)

@@ -27,6 +27,7 @@ import           D21
 import           D22
 import           D23
 import           D24
+import           D25
 
 main :: IO ()
 main = do
@@ -81,6 +82,8 @@ main = do
     "23b" -> day23B
     "24a" -> day24A
     "24b" -> day24B
+    "25a" -> day25A
+    "25b" -> day25B
 
   putStrLn ""
   putStrLn "--------------------------------------------------------------------------------"
